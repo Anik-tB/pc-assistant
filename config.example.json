@@ -1,0 +1,40 @@
+{
+  "ai": {
+    "provider": "openai",
+    "api_key": "your-openai-api-key-here",
+    "model": "gpt-4",
+    "endpoint": "https://api.openai.com/v1/chat/completions",
+    "temperature": 0.3,
+    "max_tokens": 500
+  },
+  "gemini": {
+    "api_key": "your-gemini-api-key-here",
+    "model": "gemini-pro"
+  },
+  "monitoring": {
+    "interval_seconds": 5,
+    "enable_background": true
+  },
+  "command": {
+    "timeout_seconds": 30,
+    "require_confirmation": true,
+    "dangerous_commands": ["shutdown", "reboot", "delete", "kill", "format"]
+  },
+  "file_scanner": {
+    "max_results": 1000,
+    "enable_indexing": false,
+    "excluded_dirs": ["node_modules", ".git", "AppData", "Windows"]
+  },
+  "database": {
+    "path": "./data/commands.db"
+  },
+  "logging": {
+    "level": "INFO",
+    "file": "./logs/assistant.log"
+  },
+  "ui": {
+    "theme": "dark",
+    "show_system_stats": true,
+    "command_history_size": 50
+  }
+}
