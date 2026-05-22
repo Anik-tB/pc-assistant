@@ -12,8 +12,25 @@
 - **🔌 Plugin System** - Extensible architecture with hot-reload
 - **📊 Advanced Analytics** - Usage tracking and performance metrics
 - **🐳 Docker Support** - Containerized deployment ready
-- **🔒 Enhanced Security** - JWT authentication and RBAC
+- **🔒 Enhanced Security** - JWT authentication, RBAC, and sanitized system execution
 - **📡 WebSocket API** - Real-time bidirectional communication
+- **💾 Memory Store** - SQLite database for persistent command history and mappings
+
+## 🛠️ Technology Stack
+
+**Backend**
+- **Python 3.8+**
+- **FastAPI** - High-performance async REST API
+- **SQLite** - Lightweight database for configuration and memory store
+- **Uvicorn** - ASGI web server
+- **WebSockets** - Native real-time streaming
+
+**Frontend**
+- **React 18** - UI Library
+- **Vite** - Blazing fast frontend tooling
+- **Material UI (MUI)** - Modern component library
+- **Zustand** - Lightweight state management
+- **Recharts** - Data visualization and monitoring graphs
 
 ## 📦 Installation
 
@@ -152,14 +169,16 @@ pc-assistant/
 │   └── main.py               # FastAPI server
 ├── frontend/
 │   ├── src/
-│   │   └── App.tsx           # React dashboard
+│   │   └── App.tsx           # React dashboard (Zustand, MUI, Recharts)
 │   └── package.json
 ├── modules/
 │   ├── ai_client.py          # AI integration
 │   ├── command_processor.py  # Command processing
+│   ├── memory_store.py       # SQLite command mapping & history
+│   ├── plugin_manager.py     # Plugin system
+│   ├── system_executor.py    # Safe command execution
 │   ├── task_scheduler.py     # Task scheduling
 │   ├── voice_controller.py   # Voice commands
-│   ├── plugin_manager.py     # Plugin system
 │   └── ...
 ├── plugins/
 │   └── browser_plugin.py     # Example plugin
@@ -181,6 +200,9 @@ Edit `config.json`:
   },
   "monitoring": {
     "interval_seconds": 5
+  },
+  "database": {
+    "path": "./data/commands.db"
   }
 }
 ```
@@ -210,7 +232,7 @@ Edit `config.json`:
 
 - JWT authentication for API access
 - Input sanitization to prevent injection
-- Command whitelisting for safety
+- Command whitelisting and timeout protection for safety
 - Encrypted configuration storage
 - Audit logging for all actions
 
