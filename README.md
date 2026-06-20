@@ -6,14 +6,16 @@
 
 ### ✨ What's New in v2.0
 
-- **🌐 Web Dashboard** - Modern React interface with real-time monitoring
+- **🌐 Web Dashboard** - Premium Dark Glassmorphism React interface with real-time monitoring
+- **🧠 Autonomous Agentic Loop** - Recursive thought process for handling complex multi-step tasks
+- **🤖 Offline AI Support** - Native integration with local LLMs via Ollama, plus Gemini and OpenAI
 - **🎤 Voice Commands** - Hands-free control with speech recognition
 - **⏰ Task Scheduler** - Cron-like scheduling for automated tasks
-- **🔌 Plugin System** - Extensible architecture with hot-reload
+- **🔌 Plugin System** - Extensible architecture with hot-reload (Vision, Media, IoT, Email)
 - **📊 Advanced Analytics** - Usage tracking and performance metrics
 - **🐳 Docker Support** - Containerized deployment ready
 - **🔒 Enhanced Security** - JWT authentication, RBAC, and sanitized system execution
-- **📡 WebSocket API** - Real-time bidirectional communication
+- **📡 Native WebSocket API** - Real-time bidirectional telemetry streaming
 - **💾 Memory Store** - SQLite database for persistent command history and mappings
 
 ## 🛠️ Technology Stack
@@ -181,6 +183,10 @@ pc-assistant/
 │   ├── voice_controller.py   # Voice commands
 │   └── ...
 ├── plugins/
+│   ├── vision_plugin.py      # Image analysis and screen reading
+│   ├── media_plugin.py       # Volume and media playback control
+│   ├── iot_plugin.py         # Smart home device integrations
+│   ├── email_plugin.py       # Email checking and sending
 │   └── browser_plugin.py     # Example plugin
 ├── Dockerfile
 ├── docker-compose.yml
@@ -194,9 +200,13 @@ Edit `config.json`:
 ```json
 {
   "ai": {
-    "provider": "openai",
+    "provider": "gemini",
     "api_key": "your-api-key",
-    "model": "gpt-3.5-turbo"
+    "model": "gemini-2.5-flash"
+  },
+  "ollama": {
+    "url": "http://localhost:11434",
+    "model": "llama3"
   },
   "monitoring": {
     "interval_seconds": 5
