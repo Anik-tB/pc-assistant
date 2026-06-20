@@ -1,20 +1,14 @@
 """
 AI API Client
-Handles communication with AI APIs (OpenAI, Gemini)
+Handles communication with AI APIs (OpenAI, Gemini, Ollama) and acts as an Agent.
 """
 
 import json
 import requests
-from typing import Dict, Any, Optional
-from openai import OpenAI
-try:
-    from google import genai
-except ImportError:
-    genai = None
-
+from typing import Dict, Any, List
 
 class AIClient:
-    """Client for AI API communication"""
+    """Client for AI API communication and agentic loop"""
 
     def __init__(self, config: Dict[str, Any]):
         """Initialize AI client with configuration"""
@@ -25,156 +19,121 @@ class AIClient:
             self._init_openai()
         elif self.provider == "gemini":
             self._init_gemini()
+        elif self.provider == "ollama":
+            self._init_ollama()
         else:
             raise ValueError(f"Unsupported AI provider: {self.provider}")
 
     def _init_openai(self):
-        """Initialize OpenAI client"""
+        from openai import OpenAI
         api_key = self.config.get("ai", {}).get("api_key")
         if not api_key or api_key == "your-openai-api-key-here":
             raise ValueError("OpenAI API key not configured")
-
-        # Initialize OpenAI client (new 1.0+ syntax)
         self.openai_client = OpenAI(api_key=api_key)
         self.model = self.config.get("ai", {}).get("model", "gpt-4")
 
     def _init_gemini(self):
-        """Initialize Gemini client"""
-        if genai is None:
+        try:
+            from google import genai
+        except ImportError:
             raise ImportError("google-genai not installed. Run: pip install google-genai")
-
-        api_key = self.config.get("gemini", {}).get("api_key")
+        api_key = self.config.get("gemini", {}).get("api_key", self.config.get("ai", {}).get("api_key"))
         if not api_key or api_key == "your-gemini-api-key-here":
             raise ValueError("Gemini API key not configured")
-
         self.gemini_client = genai.Client(api_key=api_key)
         self.model = self.config.get("gemini", {}).get("model", "gemini-2.5-flash")
 
-    def get_intent(self, user_input: str) -> Dict[str, Any]:
-        """
-        Get command intent from user input
+    def _init_ollama(self):
+        self.ollama_url = self.config.get("ollama", {}).get("url", "http://localhost:11434")
+        self.model = self.config.get("ollama", {}).get("model", "llama3")
 
-        Args:
-            user_input: Natural language command from user
-
-        Returns:
-            Dictionary with intent, parameters, and confidence
-        """
-        system_prompt = self._get_system_prompt()
+    def get_agent_response(self, messages: List[Dict[str, str]], available_tools: Dict[str, str]) -> Dict[str, Any]:
+        """Get next agent action based on conversation history"""
+        system_prompt = self._get_system_prompt(available_tools)
 
         if self.provider == "openai":
-            return self._get_intent_openai(system_prompt, user_input)
+            return self._get_response_openai(system_prompt, messages)
         elif self.provider == "gemini":
-            return self._get_intent_gemini(system_prompt, user_input)
+            return self._get_response_gemini(system_prompt, messages)
+        elif self.provider == "ollama":
+            return self._get_response_ollama(system_prompt, messages)
 
-    def _get_system_prompt(self) -> str:
-        """Get system prompt for AI"""
-        return """You are a PC automation assistant that converts natural language commands into structured intents.
+    def _get_system_prompt(self, available_tools: Dict[str, str]) -> str:
+        tools_str = json.dumps(available_tools, indent=2)
+        return f"""You are an autonomous PC Assistant agent.
+You have the following tools available to help the user:
+{tools_str}
 
-Analyze the user's command and respond with a JSON object containing:
-- intent: The action type (open_app, close_app, find_files, system_control, process_control, system_info, plugin_command, etc.)
-- parameters: Dictionary of parameters needed for the command
-- confidence: Float between 0 and 1
-- requires_confirmation: Boolean if action is destructive
+You must respond ONLY with a JSON object in one of two formats:
 
-Command Categories:
-1. Application Control: open, close, restart apps
-2. File Operations: find, create, delete, move, copy files
-3. System Control: shutdown, reboot, sleep, lock
-4. Process Management: list, kill processes
-5. System Info: disk usage, ram usage, cpu usage
-6. Complex Tasks & Plugins: Map commands that involve browsing, web searches, or other external actions to "plugin_command".
-   For browsers, use `command_name` as "open_url" and provide the "url".
+1. To use a tool to gather information or perform an action:
+{{
+  "action": "tool_call",
+  "command_name": "<name_of_tool_from_the_list_above>",
+  "parameters": {{ "<param_name>": "<value>" }}
+}}
 
-Examples:
-User: "open chrome"
-Response: {"intent": "open_app", "parameters": {"app_name": "chrome"}, "confidence": 0.95, "requires_confirmation": false}
+2. To give a final answer to the user after using tools (or if no tools are needed):
+{{
+  "action": "final_answer",
+  "text": "<what you want to say to the user>"
+}}
 
-User: "find all pdf files"
-Response: {"intent": "find_files", "parameters": {"extension": "pdf"}, "confidence": 0.9, "requires_confirmation": false}
+When you receive a tool result in your history, analyze it and either call another tool or give a final answer.
+Respond ONLY with valid JSON. No markdown formatting around the JSON block.
+"""
 
-User: "shutdown in 5 minutes"
-Response: {"intent": "shutdown", "parameters": {"delay_minutes": 5}, "confidence": 0.95, "requires_confirmation": true}
-
-User: "kill chrome"
-Response: {"intent": "kill_process", "parameters": {"process_name": "chrome"}, "confidence": 0.9, "requires_confirmation": true}
-
-User: "open youtube and search for cats"
-Response: {"intent": "plugin_command", "parameters": {"command_name": "open_url", "url": "https://www.youtube.com/results?search_query=cats"}, "confidence": 0.95, "requires_confirmation": false}
-
-User: "go to google.com"
-Response: {"intent": "plugin_command", "parameters": {"command_name": "open_url", "url": "https://google.com"}, "confidence": 0.95, "requires_confirmation": false}
-
-Respond ONLY with valid JSON, no additional text."""
-
-    def _get_intent_openai(self, system_prompt: str, user_input: str) -> Dict[str, Any]:
-        """Get intent using OpenAI API"""
+    def _extract_json(self, content: str) -> Dict[str, Any]:
+        content = content.strip()
+        if "```json" in content:
+            content = content.split("```json")[1].split("```")[0].strip()
+        elif "```" in content:
+            content = content.split("```")[1].split("```")[0].strip()
+        
         try:
-            # Use new OpenAI 1.0+ client syntax
+            return json.loads(content)
+        except json.JSONDecodeError as e:
+            return {"action": "final_answer", "text": f"Error parsing my own thoughts: {e}. Raw: {content}"}
+
+    def _get_response_openai(self, system_prompt: str, messages: list) -> Dict[str, Any]:
+        api_messages = [{"role": "system", "content": system_prompt}] + messages
+        try:
             response = self.openai_client.chat.completions.create(
                 model=self.model,
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_input}
-                ],
-                temperature=self.config.get("ai", {}).get("temperature", 0.3),
-                max_tokens=self.config.get("ai", {}).get("max_tokens", 500)
+                messages=api_messages,
+                temperature=0.2
             )
-
-            content = response.choices[0].message.content.strip()
-
-            # Extract JSON from response
-            if "```json" in content:
-                content = content.split("```json")[1].split("```")[0].strip()
-            elif "```" in content:
-                content = content.split("```")[1].split("```")[0].strip()
-
-            return json.loads(content)
-
-        except json.JSONDecodeError as e:
-            return {
-                "intent": "unknown",
-                "parameters": {},
-                "confidence": 0.0,
-                "error": f"Failed to parse AI response: {e}"
-            }
+            return self._extract_json(response.choices[0].message.content)
         except Exception as e:
-            return {
-                "intent": "error",
-                "parameters": {},
-                "confidence": 0.0,
-                "error": str(e)
-            }
+            return {"action": "final_answer", "text": str(e)}
 
-    def _get_intent_gemini(self, system_prompt: str, user_input: str) -> Dict[str, Any]:
-        """Get intent using Gemini API"""
+    def _get_response_gemini(self, system_prompt: str, messages: list) -> Dict[str, Any]:
+        # Convert roles for Gemini
+        gemini_contents = [system_prompt]
+        for m in messages:
+            role = "user" if m["role"] == "user" else "model"
+            gemini_contents.append(f"{role.upper()}: {m['content']}")
+            
+        prompt = "\n\n".join(gemini_contents)
         try:
-            prompt = f"{system_prompt}\n\nUser command: {user_input}"
             response = self.gemini_client.models.generate_content(
                 model=self.model,
                 contents=prompt
             )
-            content = response.text.strip()
-
-            # Extract JSON from response
-            if "```json" in content:
-                content = content.split("```json")[1].split("```")[0].strip()
-            elif "```" in content:
-                content = content.split("```")[1].split("```")[0].strip()
-
-            return json.loads(content)
-
-        except json.JSONDecodeError as e:
-            return {
-                "intent": "unknown",
-                "parameters": {},
-                "confidence": 0.0,
-                "error": f"Failed to parse AI response: {e}"
-            }
+            return self._extract_json(response.text)
         except Exception as e:
-            return {
-                "intent": "error",
-                "parameters": {},
-                "confidence": 0.0,
-                "error": str(e)
-            }
+            return {"action": "final_answer", "text": str(e)}
+
+    def _get_response_ollama(self, system_prompt: str, messages: list) -> Dict[str, Any]:
+        api_messages = [{"role": "system", "content": system_prompt}] + messages
+        try:
+            response = requests.post(f"{self.ollama_url}/api/chat", json={
+                "model": self.model,
+                "messages": api_messages,
+                "stream": False,
+                "format": "json"
+            })
+            content = response.json()["message"]["content"]
+            return self._extract_json(content)
+        except Exception as e:
+            return {"action": "final_answer", "text": f"Ollama connection error: {e}"}
