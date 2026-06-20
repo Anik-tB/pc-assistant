@@ -44,21 +44,23 @@ echo.
 echo  [1] Start CLI Mode (Basic)
 echo  [2] Start Web Dashboard (Advanced)
 echo  [3] Start Backend API Server Only
-echo  [4] Test Voice Commands
-echo  [5] View System Status
-echo  [6] Install Advanced Dependencies
-echo  [7] Run Tests
+echo  [4] Start Voice Mode (Hands-free)
+echo  [5] Test Voice Commands
+echo  [6] View System Status
+echo  [7] Install Advanced Dependencies
+echo  [8] Run Tests
 echo  [0] Exit
 echo.
-set /p choice="Enter your choice (0-7): "
+set /p choice="Enter your choice (0-8): "
 
 if "%choice%"=="1" goto cli_mode
 if "%choice%"=="2" goto web_dashboard
 if "%choice%"=="3" goto backend_only
-if "%choice%"=="4" goto voice_test
-if "%choice%"=="5" goto system_status
-if "%choice%"=="6" goto install_advanced
-if "%choice%"=="7" goto run_tests
+if "%choice%"=="4" goto voice_mode
+if "%choice%"=="5" goto voice_test
+if "%choice%"=="6" goto system_status
+if "%choice%"=="7" goto install_advanced
+if "%choice%"=="8" goto run_tests
 if "%choice%"=="0" goto end
 goto menu
 
@@ -72,6 +74,28 @@ echo Type 'help' for available commands
 echo Type 'exit' to quit
 echo.
 python main.py
+pause
+goto menu
+
+:voice_mode
+cls
+echo ========================================
+echo  Starting Voice Mode
+echo ========================================
+echo.
+
+REM Check if voice dependencies are installed
+python -c "import speech_recognition, pyttsx3, pyaudio" 2>nul
+if errorlevel 1 (
+    echo [WARNING] Voice dependencies not installed!
+    echo Installing now...
+    pip install SpeechRecognition pyttsx3 pyaudio
+)
+
+echo Say 'hey assistant' to wake up the assistant.
+echo Press Ctrl+C to stop.
+echo.
+python main.py --voice
 pause
 goto menu
 
