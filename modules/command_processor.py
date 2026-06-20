@@ -11,7 +11,7 @@ from .system_executor import SystemExecutor
 from .file_scanner import FileScanner
 from .process_monitor import ProcessMonitor
 from .system_monitor import SystemMonitor
-
+from .plugin_manager import PluginManager
 
 class CommandProcessor:
     """Main command processor"""
@@ -25,6 +25,8 @@ class CommandProcessor:
         self.file_scanner = FileScanner(config)
         self.process_monitor = ProcessMonitor()
         self.system_monitor = SystemMonitor(config)
+        self.plugin_manager = PluginManager()
+        self.plugin_manager.load_all_plugins()
 
     def process(self, user_input: str) -> Dict[str, Any]:
         """
@@ -67,6 +69,9 @@ class CommandProcessor:
 
         if intent == "find_files":
             return self._handle_find_files(parameters)
+
+        if intent == "plugin_command":
+            return self._handle_plugin_command(parameters)
 
         # Map intent to system command
         command_data = self.mapper.map_intent_to_command(intent, parameters)
@@ -192,3 +197,37 @@ class CommandProcessor:
             "message": f"Found {len(results)} files",
             "output": output
         }
+
+    def _handle_plugin_command(self, parameters: Dict[str, Any]) -> Dict[str, Any]:
+        """Handle plugin command requests"""
+        command_name = parameters.get("command_name")
+        if not command_name:
+            return {
+                "success": False,
+                "message": "No command name specified for plugin"
+            }
+        
+        try:
+            result = self.plugin_manager.execute_command(command_name, parameters)
+            
+            # If the plugin returned a dict, extract its fields
+            if isinstance(result, dict):
+                return {
+                    "success": result.get("success", True),
+                    "message": result.get("message", "Plugin command executed"),
+                    "output": result.get("output", result.get("error", ""))
+                }
+            
+            # If it returned something else, just stringify it
+            return {
+                "success": True,
+                "message": "Plugin command executed",
+                "output": str(result)
+            }
+        except Exception as e:
+            return {
+                "success": False,
+                "message": f"Plugin error: {str(e)}",
+                "error": str(e)
+            }
+
