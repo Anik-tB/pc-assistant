@@ -29,12 +29,23 @@ logger = setup_logger()
 class PCAssistant:
     """Main PC Automation Assistant class"""
 
-    def __init__(self, config_path="config.json"):
+    def __init__(self, config_path="config.json", use_voice=False):
         """Initialize the assistant"""
         self.config = load_config(config_path)
         self.processor = CommandProcessor(self.config)
         self.system_monitor = SystemMonitor(self.config)
         self.running = True
+
+        self.use_voice = use_voice
+        self.voice = None
+        if self.use_voice:
+            try:
+                from modules.voice_controller import VoiceController
+                self.voice = VoiceController()
+                logger.info("Voice Controller initialized")
+            except Exception as e:
+                console.print(f"[red]Failed to initialize voice controller:[/red] {e}")
+                self.use_voice = False
 
         logger.info("PC Assistant initialized")
 
@@ -91,10 +102,14 @@ class PCAssistant:
 
             if result['success']:
                 console.print(f"[green]✓[/green] {result['message']}")
+                if self.use_voice and self.voice:
+                    self.voice.speak(result['message'])
                 if result.get('output'):
                     console.print(Panel(result['output'], title="Output", border_style="blue"))
             else:
                 console.print(f"[red]✗[/red] {result['message']}")
+                if self.use_voice and self.voice:
+                    self.voice.speak(f"Error: {result['message']}")
                 if result.get('error'):
                     console.print(f"[dim]{result['error']}[/dim]")
 
@@ -159,6 +174,33 @@ class PCAssistant:
 
         logger.info("PC Assistant stopped")
 
+    def run_voice_mode(self):
+        """Run in continuous voice mode"""
+        self.display_welcome()
+        if not self.use_voice or not self.voice:
+            console.print("[red]Voice mode not available.[/red]")
+            return
+
+        console.print("[bold green]Voice Mode Active![/bold green] Say 'hey assistant' to wake me up.")
+        self.voice.speak("Voice mode activated. Say hey assistant to wake me up.")
+
+        def on_command(cmd):
+            console.print(f"\n[bold cyan]Heard:[/bold cyan] {cmd}")
+            self.process_command(cmd)
+
+        self.voice.listen_for_wake_word(callback=on_command)
+
+        try:
+            import time
+            while self.running:
+                time.sleep(1)
+        except KeyboardInterrupt:
+            console.print("\n[yellow]Voice mode stopped[/yellow]")
+            self.running = False
+        finally:
+            if self.voice:
+                self.voice.stop_listening()
+
     def run_single_command(self, command: str):
         """Run a single command and exit"""
         self.process_command(command)
@@ -166,6 +208,12 @@ class PCAssistant:
 
 def main():
     """Main entry point"""
+    import argparse
+    parser = argparse.ArgumentParser(description="PC Automation Assistant")
+    parser.add_argument("--voice", action="store_true", help="Enable voice control mode")
+    parser.add_argument("command", nargs="*", help="Single command to execute")
+    args = parser.parse_args()
+
     # Check if config exists
     config_path = Path("config.json")
     if not config_path.exists():
@@ -175,16 +223,18 @@ def main():
 
     # Initialize assistant
     try:
-        assistant = PCAssistant()
+        assistant = PCAssistant(use_voice=args.voice)
     except Exception as e:
         console.print(f"[red]Failed to initialize assistant:[/red] {e}")
         logger.error(f"Initialization error: {e}", exc_info=True)
         sys.exit(1)
 
     # Check if command provided as argument
-    if len(sys.argv) > 1:
-        command = " ".join(sys.argv[1:])
+    if args.command:
+        command = " ".join(args.command)
         assistant.run_single_command(command)
+    elif args.voice:
+        assistant.run_voice_mode()
     else:
         assistant.run_interactive()
 
