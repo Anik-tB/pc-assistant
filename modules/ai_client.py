@@ -8,7 +8,7 @@ import requests
 from typing import Dict, Any, Optional
 from openai import OpenAI
 try:
-    import google.generativeai as genai
+    from google import genai
 except ImportError:
     genai = None
 
@@ -41,15 +41,14 @@ class AIClient:
     def _init_gemini(self):
         """Initialize Gemini client"""
         if genai is None:
-            raise ImportError("google-generativeai not installed. Run: pip install google-generativeai")
+            raise ImportError("google-genai not installed. Run: pip install google-genai")
 
         api_key = self.config.get("gemini", {}).get("api_key")
         if not api_key or api_key == "your-gemini-api-key-here":
             raise ValueError("Gemini API key not configured")
 
-        genai.configure(api_key=api_key)
-        self.model = self.config.get("gemini", {}).get("model", "gemini-pro")
-        self.gemini_model = genai.GenerativeModel(self.model)
+        self.gemini_client = genai.Client(api_key=api_key)
+        self.model = self.config.get("gemini", {}).get("model", "gemini-2.5-flash")
 
     def get_intent(self, user_input: str) -> Dict[str, Any]:
         """
@@ -73,7 +72,7 @@ class AIClient:
         return """You are a PC automation assistant that converts natural language commands into structured intents.
 
 Analyze the user's command and respond with a JSON object containing:
-- intent: The action type (open_app, close_app, find_files, system_control, process_control, system_info, etc.)
+- intent: The action type (open_app, close_app, find_files, system_control, process_control, system_info, plugin_command, etc.)
 - parameters: Dictionary of parameters needed for the command
 - confidence: Float between 0 and 1
 - requires_confirmation: Boolean if action is destructive
@@ -84,6 +83,8 @@ Command Categories:
 3. System Control: shutdown, reboot, sleep, lock
 4. Process Management: list, kill processes
 5. System Info: disk usage, ram usage, cpu usage
+6. Complex Tasks & Plugins: Map commands that involve browsing, web searches, or other external actions to "plugin_command".
+   For browsers, use `command_name` as "open_url" and provide the "url".
 
 Examples:
 User: "open chrome"
@@ -97,6 +98,12 @@ Response: {"intent": "shutdown", "parameters": {"delay_minutes": 5}, "confidence
 
 User: "kill chrome"
 Response: {"intent": "kill_process", "parameters": {"process_name": "chrome"}, "confidence": 0.9, "requires_confirmation": true}
+
+User: "open youtube and search for cats"
+Response: {"intent": "plugin_command", "parameters": {"command_name": "open_url", "url": "https://www.youtube.com/results?search_query=cats"}, "confidence": 0.95, "requires_confirmation": false}
+
+User: "go to google.com"
+Response: {"intent": "plugin_command", "parameters": {"command_name": "open_url", "url": "https://google.com"}, "confidence": 0.95, "requires_confirmation": false}
 
 Respond ONLY with valid JSON, no additional text."""
 
@@ -143,7 +150,10 @@ Respond ONLY with valid JSON, no additional text."""
         """Get intent using Gemini API"""
         try:
             prompt = f"{system_prompt}\n\nUser command: {user_input}"
-            response = self.gemini_model.generate_content(prompt)
+            response = self.gemini_client.models.generate_content(
+                model=self.model,
+                contents=prompt
+            )
             content = response.text.strip()
 
             # Extract JSON from response
